@@ -344,8 +344,3 @@ No GitHub Pages, Vercel, or Azure deployment workflow is created as part of this
 - Add additional automated test coverage for API and frontend flows
 - Add admin audit logs and improved analytics reporting
 
-## Notes for Repository Cleanup
-
-This repository was consolidated to keep a single root README as the primary project documentation. Redundant Markdown documents and summary files were removed so that the project is easier to review on GitHub without duplicating information already present in the actual application code.
-
-The project keeps essential configuration files such as `docker-compose.yml`, `.env.example`, package manifests, and `.gitignore` intact. Real environment files remain excluded from Git.
