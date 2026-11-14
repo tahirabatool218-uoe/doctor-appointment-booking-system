@@ -1,4 +1,7 @@
+
 import { Router } from "express";
+import { connectDB } from "../config/db";
+
 import authRoutes from "./auth.routes";
 import userRoutes from "./user.routes";
 import specialtyRoutes from "./specialty.routes";
@@ -10,7 +13,20 @@ import dashboardRoutes from "./dashboard.routes";
 
 const router = Router();
 
-router.get("/health", (_req, res) => res.json({ status: "ok" }));
+// Health endpoint does not require MongoDB.
+router.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
+// Ensure MongoDB is connected before database-dependent routes.
+router.use(async (_req, _res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);

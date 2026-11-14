@@ -1,49 +1,62 @@
-
 import mongoose from "mongoose";
 import { env } from "./env";
 import "../models";
 
-let connectionPromise: Promise<typeof mongoose> | null = null;
+declare global {
+  // eslint-disable-next-line no-var
+  var __mongooseConnectionPromise: Promise<mongoose.Mongoose> | undefined;
+}
+
+let connectionPromise: Promise<mongoose.Mongoose> | null =
+  globalThis.__mongooseConnectionPromise ?? null;
 
 export async function connectDB(): Promise<void> {
   mongoose.set("strictQuery", true);
 
-  // Reuse an existing connection.
   if (mongoose.connection.readyState === 1) {
     return;
   }
 
-  // Reset a stale promise if the connection was disconnected.
   if (mongoose.connection.readyState === 0) {
     connectionPromise = null;
+    globalThis.__mongooseConnectionPromise = undefined;
   }
 
-  // Create only one connection attempt for concurrent requests.
   if (!connectionPromise) {
     connectionPromise = mongoose
       .connect(env.MONGODB_URI, {
         serverSelectionTimeoutMS: 10000,
+        connectTimeoutMS: 10000,
+        socketTimeoutMS: 45000,
+        maxPoolSize: 10,
       })
-      .then(async (connection) => {
-        // Initialize model indexes once per connection.
+      .then(async (conn: mongoose.Mongoose) => {
         await Promise.all(
           Object.values(mongoose.models).map((model) => model.init())
         );
-
         console.log("MongoDB connected successfully");
-        return connection;
+        return conn;
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         connectionPromise = null;
+        globalThis.__mongooseConnectionPromise = undefined;
         console.error("MongoDB connection failed:", error);
         throw error;
       });
+
+    globalThis.__mongooseConnectionPromise = connectionPromise;
   }
 
   await connectionPromise;
 }
 
 export async function disconnectDB(): Promise<void> {
+  if (mongoose.connection.readyState === 0) return;
   connectionPromise = null;
+  globalThis.__mongooseConnectionPromise = undefined;
   await mongoose.disconnect();
+}
+
+export function isMongoConnected(): boolean {
+  return mongoose.connection.readyState === 1;
 }
