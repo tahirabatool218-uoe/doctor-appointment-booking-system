@@ -1,15 +1,49 @@
+
 import mongoose from "mongoose";
 import { env } from "./env";
-import "../models"; // register all models so indexes can be built
+import "../models";
+
+let connectionPromise: Promise<typeof mongoose> | null = null;
 
 export async function connectDB(): Promise<void> {
   mongoose.set("strictQuery", true);
-  await mongoose.connect(env.MONGODB_URI);
-  // Make sure indexes (incl. the unique partial "no double booking" index) exist before serving traffic.
-  await Promise.all(Object.values(mongoose.models).map((m) => m.init()));
-  console.log("MongoDB connected");
+
+  // Reuse an existing connection.
+  if (mongoose.connection.readyState === 1) {
+    return;
+  }
+
+  // Reset a stale promise if the connection was disconnected.
+  if (mongoose.connection.readyState === 0) {
+    connectionPromise = null;
+  }
+
+  // Create only one connection attempt for concurrent requests.
+  if (!connectionPromise) {
+    connectionPromise = mongoose
+      .connect(env.MONGODB_URI, {
+        serverSelectionTimeoutMS: 10000,
+      })
+      .then(async (connection) => {
+        // Initialize model indexes once per connection.
+        await Promise.all(
+          Object.values(mongoose.models).map((model) => model.init())
+        );
+
+        console.log("MongoDB connected successfully");
+        return connection;
+      })
+      .catch((error) => {
+        connectionPromise = null;
+        console.error("MongoDB connection failed:", error);
+        throw error;
+      });
+  }
+
+  await connectionPromise;
 }
 
 export async function disconnectDB(): Promise<void> {
+  connectionPromise = null;
   await mongoose.disconnect();
 }

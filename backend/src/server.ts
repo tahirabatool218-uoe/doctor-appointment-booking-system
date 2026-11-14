@@ -1,33 +1,28 @@
-
-import { app } from "./app";
+import app from "./app";
 import { env } from "./config/env";
-import { connectDB, disconnectDB } from "./config/db";
-import mongoose from "mongoose";
+import { connectDB, disconnectDB, isMongoConnected } from "./config/db";
 import type { Request, Response } from "express";
 
-// Reuse database connection across serverless invocations
-let dbConnectionPromise: Promise<void> | null = null;
+declare global {
+  // eslint-disable-next-line no-var
+  var __serverDbPromise: Promise<void> | undefined;
+}
 
 async function ensureDBConnection(): Promise<void> {
-  // Already connected
-  if (mongoose.connection.readyState === 1) {
+  if (isMongoConnected()) {
     return;
   }
 
-  // Reset stale connection promise if disconnected
-  if (mongoose.connection.readyState === 0) {
-    dbConnectionPromise = null;
+  if (!global.__serverDbPromise) {
+    global.__serverDbPromise = connectDB()
+      .then(() => undefined)
+      .catch((error) => {
+        global.__serverDbPromise = undefined;
+        throw error;
+      });
   }
 
-  // Create connection only once
-  if (!dbConnectionPromise) {
-    dbConnectionPromise = connectDB().catch((error) => {
-      dbConnectionPromise = null;
-      throw error;
-    });
-  }
-
-  await dbConnectionPromise;
+  await global.__serverDbPromise;
 }
 
 // Vercel Serverless Function Handler
